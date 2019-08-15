@@ -34,7 +34,7 @@ int CalcCost(shared_ptr<Mat>, shared_ptr<Mat>, int, int, int, int);
 Vec3b bgrPixel(0,255, 255);
 void stereo(shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
 void selsectiveStereo(shared_ptr<Mat> , shared_ptr<Mat> , layerVector* , int , int);
-void makeResult(vector<layerVector>, int, int, int, string);
+void makeResult(shared_ptr<Mat> ,vector<layerVector>, int, int, int, string);
 
 int main()
 {
@@ -46,6 +46,7 @@ int main()
 	ReadBothImages(leftImage, rightImage);
 	numOfRows = leftImage->rows;
 	numOfColumns = leftImage->cols;
+	auto result= make_shared<Mat>(numOfRows, numOfColumns, CV_8UC1);
 	Meshing(numOfRows, numOfColumns, thickness, maxkernelSize, maxDisparity);
 	auto start = chrono::high_resolution_clock::now();
 	try
@@ -64,26 +65,33 @@ int main()
 	auto value = duration.count();
 	string duration_s = to_string(value);
 
-	makeResult(layers, numOfRows, numOfColumns, kernelSize, duration_s);
+	makeResult(result,layers, numOfRows, numOfColumns, kernelSize, duration_s);
 	////////////////////////////////////////////////////////////////////
 	/// In this part we have impelemet selective stereo.
 	////////////////////////////////////////////////////////////////////
-	try
-	{
-		for (int i = 0; i < layers.size(); i++) {
-			selsectiveStereo(leftImage, rightImage, &layers[i], kernelSize, midleDisparity);
+	for (int tempdisparity = 3; tempdisparity < maxDisparity; tempdisparity++) {
+
+		if (result->type() == CV_8UC1) {
+			//input image is grayscale
+			cvtColor(*result, *stereoResult, CV_GRAY2RGB);
+
 		}
+		try
+		{
+			for (int i = 0; i < layers.size(); i++) {
+				selsectiveStereo(leftImage, rightImage, &layers[i], kernelSize, tempdisparity);
+			}
+		}
+		catch (cv::Exception & e)
+		{
+			cerr << e.msg << endl; // output exception message
+		}
+		cout << "tempdisparity is: " << tempdisparity << endl;
+		imshow("StereoResult", *stereoResult);
+		waitKey(10);
+		//imwrite(temp, *stereoResult);
+
 	}
-	catch (cv::Exception & e)
-	{
-		cerr << e.msg << endl; // output exception message
-	}
-
-	imshow("StereoResult", *stereoResult);
-	waitKey(10);
-	//imwrite(temp, *stereoResult);
-
-
 
 	cout << layers.size() << endl;
 	cout << "hello" << endl;
@@ -213,20 +221,20 @@ int CalcCost(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, int row, int
 ////////////////////////////////////////////////////////////////////
 /// In this part we can make the result.
 ////////////////////////////////////////////////////////////////////
-void makeResult(vector<layerVector> layers, int numOfRows, int numOfColumns, int kernalSize, string Dutime) {
-	Mat result(numOfRows, numOfColumns, CV_8UC1);
+void makeResult(shared_ptr<Mat> result,vector<layerVector> layers, int numOfRows, int numOfColumns, int kernalSize, string Dutime) {
+	
 	for (int i = 0; i < layers.size(); i++) {
 		for (int j = 0; j < layers[i].size(); j++) {
-			result.at<uchar>(layers[i][j]->row, layers[i][j]->column) = uchar(255 * layers[i][j]->disparity / 30);
+			result->at<uchar>(layers[i][j]->row, layers[i][j]->column) = uchar(255 * layers[i][j]->disparity / 30);
 		}
 
 	}
 	string temp;
 
 	temp = "result_KernelSize_" + to_string(kernalSize) + "_MaxDisparity_" + to_string(maxDisparity) + "Time_" + Dutime + "s.png";
-	if (result.type() == CV_8UC1) {
+	if (result->type() == CV_8UC1) {
 		//input image is grayscale
-		cvtColor(result, *stereoResult, CV_GRAY2RGB);
+		cvtColor(*result, *stereoResult, CV_GRAY2RGB);
 
 	}
 	//imshow("StereoResult", *stereoResult);
@@ -239,16 +247,19 @@ void makeResult(vector<layerVector> layers, int numOfRows, int numOfColumns, int
 /// In this part we clac selective disparity of each pixel.
 ////////////////////////////////////////////////////////////////////
 void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, layerVector* layer, int kernelSize, int midelDisparity) {
+
+	int temp0 = midelDisparity - 1;
+	int temp1 = midelDisparity;
+	int temp2 = midelDisparity + 1;
+	int tempCost0;
+	int tempCost1;
+	int tempCost2;
 	for (int p = 1; p < layer->size(); p++) {
 
-		int temp0= midelDisparity-1;
-		int temp1 = midelDisparity;
-		int temp2 = midelDisparity + 1;
 
-
-		int tempCost0 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp0);
-		int tempCost1 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp1);
-		int tempCost2 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp2);
+		tempCost0 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp0);
+		tempCost1 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp1);
+		tempCost2 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp2);
 
 		if (tempCost1<tempCost0 & tempCost1<tempCost2) {
 			//cout << "yess" << endl;
