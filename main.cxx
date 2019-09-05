@@ -36,6 +36,7 @@ Vec3b bgrPixel_02(0, 255, 255);
 Vec3b bgrPixel_04(255, 0, 0);
 Vec3b bgrPixel_03(0, 255, 0);
 Vec3b bgrPixel_01(0, 0, 255);
+Vec3b bgrBackground(0,0,0);
 
 void stereo(shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
 void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, layerVector* , int , int);
@@ -52,20 +53,18 @@ int main()
 	auto result_02 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo R2L.
 	auto result_03 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L consistance.
 	auto result_04 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L notconsistance.
+	auto result_total = make_shared<Mat>(4*numOfRows, numOfColumns, CV_8UC3, bgrBackground);
 	Meshing(numOfRows, numOfColumns, thickness, maxkernelSize, maxDisparity);
 	auto start = chrono::high_resolution_clock::now();
-	//try
-	//{
-	//	for (int i = 0; i < layers.size(); i++) {
-	//		stereo(leftImage, rightImage, &layers[i], kernelSize, maxDisparity);
-	//	}
-	//}
-	//catch (cv::Exception & e)
-	//{
-	//	cerr << e.msg << endl; // output exception message
-	//}
-	for (int i = 0; i < layers.size(); i++) {
-		stereo(leftImage, rightImage, &layers[i], kernelSize, maxDisparity);
+	try
+	{
+		for (int i = 0; i < layers.size(); i++) {
+			stereo(leftImage, rightImage, &layers[i], kernelSize, maxDisparity);
+		}
+	}
+	catch (cv::Exception & e)
+	{
+		cerr << e.msg << endl; // output exception message
 	}
 	chrono::high_resolution_clock::time_point stop = high_resolution_clock::now();
 	auto duration = duration_cast<seconds>(stop - start);
@@ -76,26 +75,22 @@ int main()
 	////////////////////////////////////////////////////////////////////
 	/// In this part we have impelemet selective stereo.
 	////////////////////////////////////////////////////////////////////
-	//for (int tempdisparity = 3; tempdisparity < maxDisparity; tempdisparity++) {
-
-	//	if (result->type() == CV_8UC1) {
-	//		//input image is grayscale
-	//		cvtColor(*result, *stereoResult, CV_GRAY2RGB);
-
-	//	}
-	//	try
-	//	{
-	//		for (int i = 0; i < layers.size(); i++) {
-	//			selsectiveStereo(leftImage, rightImage, &layers[i], kernelSize, tempdisparity);
-	//		}
-	//	}
-	//	catch (cv::Exception & e)
-	//	{
-	//		cerr << e.msg << endl; // output exception message
-	//	}
-		//cout << "tempdisparity is: " << tempdisparity << endl;
-
 	selsectiveStereo(leftImage, rightImage, result_01, result_02,result_03, kernelSize, 4);
+
+	try{
+		cvtColor(*result_00, *result_00, CV_GRAY2RGB);
+		result_00->copyTo((*result_total)(Rect(0, 0, numOfColumns, numOfRows)));
+		result_01->copyTo((*result_total)(Rect(0, numOfRows , numOfColumns, numOfRows)));
+		result_02->copyTo((*result_total)(Rect( 0, 2*numOfRows, numOfColumns, numOfRows)));
+		result_03->copyTo((*result_total)(Rect(0, 3*numOfRows, numOfColumns, numOfRows)));
+
+	}
+	catch (cv::Exception & e)
+	{
+		cerr << e.msg << endl; // output exception message
+	}
+
+
 	imshow("result_00", *result_00);
 	waitKey(10);
 	imshow("result_01", *result_01);
@@ -103,11 +98,9 @@ int main()
 	imshow("result_02", *result_02);
 	waitKey(10);
 	imshow("result_03", *result_03);
+	waitKey(10);
+	imshow("result_total", *result_total);
 	waitKey(0);
-	
-	int x;
-	cin >> x;// Show our image inside it.
-			 // Wait for a keystroke in the window
 	return 0;
 }
 
