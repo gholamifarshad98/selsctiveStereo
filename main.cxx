@@ -41,20 +41,21 @@ Vec3b bgrBackground(0,0,0);
 void stereo(shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
 void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, layerVector* , int , int);
 void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, int, int);
-void makeResult(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, vector<layerVector>, int, int, int, string);
+void prepareResult(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, vector<layerVector>, int, int, int, string);
 
 int main()
 {
 	auto rightImage = make_shared<Mat>();
 	auto leftImage = make_shared<Mat>();
 	ReadBothImages(leftImage, rightImage);
-	auto result_00= make_shared<Mat>(numOfRows, numOfColumns, CV_8UC1); // Stereo result.
-	auto result_01 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo L2R.
-	auto result_02 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo R2L.
-	auto result_03 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L consistance.
-	auto result_04 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L notconsistance.
-	auto result_total = make_shared<Mat>(4*numOfRows, numOfColumns, CV_8UC3, bgrBackground);
+	
 	Meshing(numOfRows, numOfColumns, thickness, maxkernelSize, maxDisparity);
+
+
+
+
+
+
 	auto start = chrono::high_resolution_clock::now();
 	try
 	{
@@ -70,37 +71,51 @@ int main()
 	auto duration = duration_cast<seconds>(stop - start);
 	auto value = duration.count();
 	string duration_s = to_string(value);
-	makeResult(result_00, result_01, result_02, result_03,layers, numOfRows, numOfColumns, kernelSize, duration_s);
 
-	////////////////////////////////////////////////////////////////////
-	/// In this part we have impelemet selective stereo.
-	////////////////////////////////////////////////////////////////////
-	selsectiveStereo(leftImage, rightImage, result_01, result_02,result_03, kernelSize, 4);
 
-	try{
-		cvtColor(*result_00, *result_00, CV_GRAY2RGB);
-		result_00->copyTo((*result_total)(Rect(0, 0, numOfColumns, numOfRows)));
-		result_01->copyTo((*result_total)(Rect(0, numOfRows , numOfColumns, numOfRows)));
-		result_02->copyTo((*result_total)(Rect( 0, 2*numOfRows, numOfColumns, numOfRows)));
-		result_03->copyTo((*result_total)(Rect(0, 3*numOfRows, numOfColumns, numOfRows)));
+	for (int midDis = 1; midDis < maxDisparity; midDis++) {
+		auto result_00 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC1); // Stereo result.
+		auto result_01 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo L2R.
+		auto result_02 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo R2L.
+		auto result_03 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L consistance.
+		auto result_04 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L notconsistance.
+		auto result_total = make_shared<Mat>(4 * numOfRows, numOfColumns, CV_8UC3, bgrBackground);
+		prepareResult(result_00, result_01, result_02, result_03, layers, numOfRows, numOfColumns, kernelSize, duration_s);
 
+		////////////////////////////////////////////////////////////////////
+		/// In this part we have impelemet selective stereo.
+		////////////////////////////////////////////////////////////////////
+		selsectiveStereo(leftImage, rightImage, result_01, result_02, result_03, kernelSize, midDis);
+
+		try {
+			cvtColor(*result_00, *result_00, CV_GRAY2RGB);
+			result_00->copyTo((*result_total)(Rect(0, 0 * numOfRows, numOfColumns, numOfRows)));
+			result_01->copyTo((*result_total)(Rect(0, 1 * numOfRows, numOfColumns, numOfRows)));
+			result_02->copyTo((*result_total)(Rect(0, 2 * numOfRows, numOfColumns, numOfRows)));
+			result_03->copyTo((*result_total)(Rect(0, 3 * numOfRows, numOfColumns, numOfRows)));
+
+		}
+		catch (cv::Exception & e)
+		{
+			cerr << e.msg << endl; // output exception message
+		}
+
+
+		/*imshow("result_00", *result_00);
+		waitKey(10);
+		imshow("result_01", *result_01);
+		waitKey(10);
+		imshow("result_02", *result_02);
+		waitKey(10);
+		imshow("result_03", *result_03);
+		waitKey(10);*/
+		imshow("result_total", *result_total);
+		string temp;
+		temp = "result_midDis_" + to_string(midDis)+ ".png";
+		imwrite(temp, *result_total);
+		waitKey(1000);
+		cout << midDis << endl;
 	}
-	catch (cv::Exception & e)
-	{
-		cerr << e.msg << endl; // output exception message
-	}
-
-
-	imshow("result_00", *result_00);
-	waitKey(10);
-	imshow("result_01", *result_01);
-	waitKey(10);
-	imshow("result_02", *result_02);
-	waitKey(10);
-	imshow("result_03", *result_03);
-	waitKey(10);
-	imshow("result_total", *result_total);
-	waitKey(0);
 	return 0;
 }
 
@@ -226,7 +241,7 @@ int CalcCost(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, int row, int
 ////////////////////////////////////////////////////////////////////
 /// In this part we can make the result.
 ////////////////////////////////////////////////////////////////////
-void makeResult(shared_ptr<Mat> result, shared_ptr<Mat> result_01, shared_ptr<Mat> result_02, shared_ptr<Mat> result_03, vector<layerVector> layers, int numOfRows, int numOfColumns, int kernalSize, string Dutime) {
+void prepareResult(shared_ptr<Mat> result, shared_ptr<Mat> result_01, shared_ptr<Mat> result_02, shared_ptr<Mat> result_03, vector<layerVector> layers, int numOfRows, int numOfColumns, int kernalSize, string Dutime) {
 	
 	for (int i = 0; i < layers.size(); i++) {
 		for (int j = 0; j < layers[i].size(); j++) {
@@ -234,9 +249,9 @@ void makeResult(shared_ptr<Mat> result, shared_ptr<Mat> result_01, shared_ptr<Ma
 		}
 
 	}
-	string temp;
+	//string temp;
 	//auto result_temp = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);
-	temp = "result_KernelSize_" + to_string(kernalSize) + "_MaxDisparity_" + to_string(maxDisparity) + "Time_" + Dutime + "s.png";
+	//temp = "result_KernelSize_" + to_string(kernalSize) + "_MaxDisparity_" + to_string(maxDisparity) + "Time_" + Dutime + "s.png";
 	cvtColor(*result, *result_01, CV_GRAY2RGB);
 	cvtColor(*result, *result_02, CV_GRAY2RGB);
 	cvtColor(*result, *result_03, CV_GRAY2RGB);
