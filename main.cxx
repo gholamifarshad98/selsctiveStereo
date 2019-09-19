@@ -298,7 +298,7 @@ void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage,shar
 			right2let = true;
 			result_2->at<Vec3b>(Point((*layer)[p]->column, (*layer)[p]->row)) = bgrPixel_02;
 		}
-		if ((left2right | right2let) &!(left2right & right2let)) {
+		if ((left2right & right2let)) {
 
 			result_3->at<Vec3b>(Point((*layer)[p]->column, (*layer)[p]->row)) = bgrPixel_04;
 		}
@@ -311,4 +311,14 @@ void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, sha
 	for (int i = 0; i < layers.size(); i++) {
 		selsectiveStereo(leftImage, rightImage,  result1,  result2, result3, &layers[i], kernelSize, midelDisparity);
 	}
+}
+
+////////////////////////////////////////////////////////////////////
+/// In this part we will Filter the result.
+////////////////////////////////////////////////////////////////////
+void filterResult(shared_ptr<Mat> result, Vec3b ) {
+
+
+
+
 }
