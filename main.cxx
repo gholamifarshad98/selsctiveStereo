@@ -18,6 +18,17 @@ struct pixel
 	int disparity;
 	bool consistance;
 };
+struct Stain
+{
+	int i;  // center of aera of stain in x direction.
+	int j;  // center of aera of stain in y direction.
+	int minI; // boundry of stain in x direction.
+	int maxI;
+	int minJ; // boundry of stain in y direction.
+	int maxJ;
+	vector<Point> stainPoints;
+
+};
 int numOfColumns;
 int numOfRows;
 int thickness = 60;
@@ -36,26 +47,22 @@ Vec3b bgrPixel_02(0, 255, 255);
 Vec3b bgrPixel_04(255, 0, 0);
 Vec3b bgrPixel_03(0, 255, 0);
 Vec3b bgrPixel_01(0, 0, 255);
-Vec3b bgrBackground(0,0,0);
+Vec3b bgrBackground(0, 0, 0);
 
 void stereo(shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
-void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, layerVector* , int , int);
+void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
 void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, int, int);
 void prepareResult(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, vector<layerVector>, int, int, int, string);
-
+void filterResult(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b);
+void checkPoint(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Stain>, int, int, Vec3b);
+void makeStain(shared_ptr<Mat> , shared_ptr<Mat> , shared_ptr<Stain> , int , int, Vec3b);
+void stainDetector(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b);
 int main()
 {
 	auto rightImage = make_shared<Mat>();
 	auto leftImage = make_shared<Mat>();
 	ReadBothImages(leftImage, rightImage);
-	
 	Meshing(numOfRows, numOfColumns, thickness, maxkernelSize, maxDisparity);
-
-
-
-
-
-
 	auto start = chrono::high_resolution_clock::now();
 	try
 	{
@@ -71,10 +78,8 @@ int main()
 	auto duration = duration_cast<seconds>(stop - start);
 	auto value = duration.count();
 	string duration_s = to_string(value);
-
-
 	for (int midDis = 1; midDis < maxDisparity; midDis++) {
-		auto result_00 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC1); // Stereo result.
+		auto result_00 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC1);// Stereo result.
 		auto result_01 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo L2R.
 		auto result_02 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// Selective stereo R2L.
 		auto result_03 = make_shared<Mat>(numOfRows, numOfColumns, CV_8UC3);// slective with L2R and R2L consistance.
@@ -99,20 +104,14 @@ int main()
 		{
 			cerr << e.msg << endl; // output exception message
 		}
-
-
-		/*imshow("result_00", *result_00);
-		waitKey(10);
-		imshow("result_01", *result_01);
-		waitKey(10);
-		imshow("result_02", *result_02);
-		waitKey(10);
-		imshow("result_03", *result_03);
-		waitKey(10);*/
-		imshow("result_total", *result_total);
 		string temp;
-		temp = "result_midDis_" + to_string(midDis)+ ".png";
-		imwrite(temp, *result_total);
+		temp = "result_midDis_" + to_string(midDis) + "withFilter.png";
+		imwrite(temp, *result_03);
+		filterResult(result_00, result_03, bgrPixel_04);
+		temp = "result_midDis_" + to_string(midDis) + "withoutFilter.png";
+		imwrite(temp, *result_03);
+		imshow("result_total", *result_03);
+		stainDetector(result_00, result_03, bgrPixel_04);
 		waitKey(1000);
 		cout << midDis << endl;
 	}
@@ -242,7 +241,7 @@ int CalcCost(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, int row, int
 /// In this part we can make the result.
 ////////////////////////////////////////////////////////////////////
 void prepareResult(shared_ptr<Mat> result, shared_ptr<Mat> result_01, shared_ptr<Mat> result_02, shared_ptr<Mat> result_03, vector<layerVector> layers, int numOfRows, int numOfColumns, int kernalSize, string Dutime) {
-	
+
 	for (int i = 0; i < layers.size(); i++) {
 		for (int j = 0; j < layers[i].size(); j++) {
 			result->at<uchar>(layers[i][j]->row, layers[i][j]->column) = uchar(255 * layers[i][j]->disparity / 30);
@@ -261,7 +260,7 @@ void prepareResult(shared_ptr<Mat> result, shared_ptr<Mat> result_01, shared_ptr
 ////////////////////////////////////////////////////////////////////
 /// In this part we clac selective disparity of each pixel.
 ////////////////////////////////////////////////////////////////////
-void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage,shared_ptr<Mat> result_1, shared_ptr<Mat> result_2, shared_ptr<Mat> result_3, layerVector* layer, int kernelSize, int midelDisparity) {
+void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, shared_ptr<Mat> result_1, shared_ptr<Mat> result_2, shared_ptr<Mat> result_3, layerVector* layer, int kernelSize, int midelDisparity) {
 	bool left2right = false;
 	bool right2let = false;
 	int temp0 = midelDisparity - 1;
@@ -286,15 +285,15 @@ void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage,shar
 		tempCost1 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp1);
 		tempCost2 = CalcCost(leftImage, rightImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp2);
 
-		tempCost3 = CalcCost(rightImage, leftImage,(*layer)[p]->row, (*layer)[p]->column, kernelSize, temp3);
+		tempCost3 = CalcCost(rightImage, leftImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp3);
 		tempCost4 = CalcCost(rightImage, leftImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp4);
 		tempCost5 = CalcCost(rightImage, leftImage, (*layer)[p]->row, (*layer)[p]->column, kernelSize, temp5);
 
-		if (tempCost1<tempCost0 & tempCost1<tempCost2) {
+		if (tempCost1 < tempCost0 & tempCost1 < tempCost2) {
 			left2right = true;
-			result_1->at<Vec3b>(Point( (*layer)[p]->column,(*layer)[p]->row)) = bgrPixel_01;
+			result_1->at<Vec3b>(Point((*layer)[p]->column, (*layer)[p]->row)) = bgrPixel_01;
 		}
-		if (tempCost4<tempCost3 & tempCost4<tempCost5) {
+		if (tempCost4 < tempCost3 & tempCost4 < tempCost5) {
 			right2let = true;
 			result_2->at<Vec3b>(Point((*layer)[p]->column, (*layer)[p]->row)) = bgrPixel_02;
 		}
@@ -309,15 +308,70 @@ void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage,shar
 
 void selsectiveStereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, shared_ptr<Mat> result1, shared_ptr<Mat> result2, shared_ptr<Mat> result3, int kernelSize, int midelDisparity) {
 	for (int i = 0; i < layers.size(); i++) {
-		selsectiveStereo(leftImage, rightImage,  result1,  result2, result3, &layers[i], kernelSize, midelDisparity);
+		selsectiveStereo(leftImage, rightImage, result1, result2, result3, &layers[i], kernelSize, midelDisparity);
 	}
 }
 
 ////////////////////////////////////////////////////////////////////
 /// In this part we will Filter the result.
 ////////////////////////////////////////////////////////////////////
-void filterResult(shared_ptr<Mat> result, Vec3b ) {
+void filterResult(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Color) {
+	int numberOfHorizontalChecker = 1;
+	bool tempCorrect = false; // it means this picxel is not corecctly selected.
+	for (int i = 0; i < numOfRows; i++) {
+		for (int j = numberOfHorizontalChecker; j < numOfColumns - numberOfHorizontalChecker; j++) {
+			if (input->at<Vec3b>(Point(j, i)) == Color) {
+				tempCorrect = false;
+				for (int k = 1; k <= numberOfHorizontalChecker; k++) {
+					if (input->at<Vec3b>(Point(j + k, i)) == Color | input->at<Vec3b>(Point(j - k, i)) == Color) {
+						tempCorrect = true;
+						break;
+					}
+				}
+				if (!tempCorrect) {
+					input->at<Vec3b>(Point(j, i)) = background->at<Vec3b>(Point(j, i));
+				}
+			}
+		}
+	}
 
+
+}
+
+
+////////////////////////////////////////////////////////////////////
+/// In this part we will detcte the stain.
+////////////////////////////////////////////////////////////////////
+void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Color) {
+	for (int i = 0; i < numOfColumns; i++) {
+		for (int j = 0; j < numOfRows; j++) {
+			if (input->at<Vec3b>(Point(i, j)) == Color) {
+				auto stain = make_shared<Stain> ();
+				makeStain(background, input, stain, i, j, Color);
+			}
+		}
+	}
+}
+
+void makeStain(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j,Vec3b Color) {
+
+	checkPoint(background, input,stain, i, j, Color);
+
+}
+
+void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input,shared_ptr<Stain> stain, int i, int j, Vec3b Color) {
+	if (input->at<Vec3b>(Point(i, j)) == Color) {
+		checkPoint(background, input,stain, i + 1, j, Color);
+		checkPoint(background, input,stain ,i, j + 1, Color);
+		checkPoint(background, input, stain, i + 1, j + 1, Color);
+		checkPoint(background, input, stain, i - 1, j, Color);
+		checkPoint(background, input, stain, i, j - 1, Color);
+		checkPoint(background, input, stain, i - 1, j - 1, Color);
+	}
+	if (input->at<Vec3b>(Point(i, j)) == Color) {
+		input->at<Vec3b>(Point(i, j)) = background->at<Vec3b>(Point(i, j));
+		stain->stainPoints.push_back(Point(i, j));
+	}
 
 
 
