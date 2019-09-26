@@ -26,6 +26,7 @@ struct Stain
 	int maxI;
 	int minJ; // boundry of stain in y direction.
 	int maxJ;
+	int area=0;
 	vector<Point> stainPoints;
 
 };
@@ -48,15 +49,15 @@ Vec3b bgrPixel_04(255, 0, 0);
 Vec3b bgrPixel_03(0, 255, 0);
 Vec3b bgrPixel_01(0, 0, 255);
 Vec3b bgrBackground(0, 0, 0);
-
+vector<int*> stainSize;
 void stereo(shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
 void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, layerVector*, int, int);
 void selsectiveStereo(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, int, int);
 void prepareResult(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Mat>, vector<layerVector>, int, int, int, string);
 void filterResult(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b);
-void checkPoint(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Stain>, int, int, Vec3b);
-void makeStain(shared_ptr<Mat> , shared_ptr<Mat> , shared_ptr<Stain> , int , int, Vec3b);
-void stainDetector(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b);
+void checkPoint(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Stain>, int, int, Vec3b,int*);
+void makeStain(shared_ptr<Mat> , shared_ptr<Mat> , shared_ptr<Stain> , int , int, Vec3b,int*);
+void stainDetector(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b, shared_ptr<vector<shared_ptr<Stain>>>);
 int main()
 {
 	auto rightImage = make_shared<Mat>();
@@ -110,8 +111,13 @@ int main()
 		filterResult(result_00, result_03, bgrPixel_04);
 		temp = "result_midDis_" + to_string(midDis) + "withoutFilter.png";
 		imwrite(temp, *result_03);
+		shared_ptr<vector<shared_ptr<Stain>>> stainResults = make_shared<vector<shared_ptr<Stain>>>() ;
 		imshow("result_total", *result_03);
-		stainDetector(result_00, result_03, bgrPixel_04);
+		stainDetector(result_00, result_03, bgrPixel_04,stainResults);
+
+		for (int i = 1; i < stainResults->size(); i++) {
+			std::cout << "the area is " <<(*(stainSize)[i]) << std::endl;
+		}
 		waitKey(1000);
 		cout << midDis << endl;
 	}
@@ -192,14 +198,10 @@ double CalcDistance(int numOfRows, int numOfColumns, int row, int column) {
 /// In this part we clac disparity of each pixel.
 ////////////////////////////////////////////////////////////////////
 void stereo(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage, layerVector* layer, int kernelSize, int maxDisparity) {
-	//imshow("leftImage", *leftImage);
-	//imshow("rightImage", *rightImage);
-	//waitKey(12);
+
 	int tempCost = 0;
 	int tempDisparity = 0;
 	for (int p = 1; p < layer->size(); p++) {
-		//cout << "the alye size is " << layer->size() << endl;
-		//cout << "disparity is  " << p << endl;
 		double cost = 10000000;
 		tempCost = 0;
 		tempDisparity = 0;
@@ -342,37 +344,46 @@ void filterResult(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Color
 ////////////////////////////////////////////////////////////////////
 /// In this part we will detcte the stain.
 ////////////////////////////////////////////////////////////////////
-void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Color) {
-	for (int i = 0; i < numOfColumns; i++) {
-		for (int j = 0; j < numOfRows; j++) {
+void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Color,shared_ptr<vector<shared_ptr<Stain>>> stainResults) {
+	
+	for (int j = 0; j < numOfRows; j++) {
+		for (int i = 0; i < numOfColumns; i++) {
 			if (input->at<Vec3b>(Point(i, j)) == Color) {
-				auto stain = make_shared<Stain> ();
-				makeStain(background, input, stain, i, j, Color);
+				shared_ptr<Stain> stain_temp = make_shared<Stain> ();
+				auto alpha = new int(0);
+				//std::cout << "this Stain area is " <<stain->area<< std::endl;
+				makeStain(background, input, stain_temp, i, j, Color, alpha);
+				//std::cout << "this Stain area is " << stain_temp->area << std::endl;
+				stainResults->push_back(stain_temp);
+				stainSize.push_back(alpha);
 			}
+
 		}
 	}
 }
 
-void makeStain(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j,Vec3b Color) {
-
-	checkPoint(background, input,stain, i, j, Color);
+void makeStain(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j,Vec3b Color, int* alpha) {
+	//std::cout << "Make stain is called" << std::endl;
+	checkPoint(background, input,stain, i, j, Color, alpha);
 
 }
 
-void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input,shared_ptr<Stain> stain, int i, int j, Vec3b Color) {
-	if (input->at<Vec3b>(Point(i, j)) == Color) {
-		checkPoint(background, input,stain, i + 1, j, Color);
-		checkPoint(background, input,stain ,i, j + 1, Color);
-		checkPoint(background, input, stain, i + 1, j + 1, Color);
-		checkPoint(background, input, stain, i - 1, j, Color);
-		checkPoint(background, input, stain, i, j - 1, Color);
-		checkPoint(background, input, stain, i - 1, j - 1, Color);
-	}
+void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j, Vec3b Color,int* alpha) {
+
 	if (input->at<Vec3b>(Point(i, j)) == Color) {
 		input->at<Vec3b>(Point(i, j)) = background->at<Vec3b>(Point(i, j));
+		//std::cout << stain->stainPoints.size() << std::endl;
+		//std::cout << stain->stainPoints.size() << std::endl;
 		stain->stainPoints.push_back(Point(i, j));
+		stain->area = stain->area + 1;
+		(*alpha) = (*alpha) + 1;
+		if (stain->stainPoints.end()->x == i & stain->stainPoints.end()->y == j) {
+			checkPoint(background, input, stain, i + 1, j, Color,alpha);
+			checkPoint(background, input, stain, i, j + 1, Color, alpha);
+			checkPoint(background, input, stain, i + 1, j + 1, Color, alpha);
+			checkPoint(background, input, stain, i - 1, j, Color, alpha);
+			checkPoint(background, input, stain, i, j - 1, Color, alpha);
+			checkPoint(background, input, stain, i - 1, j - 1, Color, alpha);
+		}
 	}
-
-
-
 }
