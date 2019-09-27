@@ -112,13 +112,13 @@ int main()
 		temp = "result_midDis_" + to_string(midDis) + "withoutFilter.png";
 		imwrite(temp, *result_03);
 		shared_ptr<vector<shared_ptr<Stain>>> stainResults = make_shared<vector<shared_ptr<Stain>>>() ;
-		imshow("result_total", *result_03);
+		//imshow("result_total", *result_03);
 		stainDetector(result_00, result_03, bgrPixel_04,stainResults);
 
 		for (int i = 1; i < stainResults->size(); i++) {
 			std::cout << "the area is " <<(*(stainSize)[i]) << std::endl;
 		}
-		waitKey(1000);
+		//waitKey(1000);
 		cout << midDis << endl;
 	}
 	return 0;
@@ -351,11 +351,12 @@ void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Colo
 			if (input->at<Vec3b>(Point(i, j)) == Color) {
 				shared_ptr<Stain> stain_temp = make_shared<Stain> ();
 				auto alpha = new int(0);
-				//std::cout << "this Stain area is " <<stain->area<< std::endl;
+				std::cout << "this Stain is called " << std::endl;
 				makeStain(background, input, stain_temp, i, j, Color, alpha);
-				//std::cout << "this Stain area is " << stain_temp->area << std::endl;
-				stainResults->push_back(stain_temp);
-				stainSize.push_back(alpha);
+				if (stain_temp->area >= 30) {
+					stainResults->push_back(stain_temp);
+					stainSize.push_back(alpha);
+				}
 			}
 
 		}
@@ -363,21 +364,16 @@ void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Colo
 }
 
 void makeStain(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j,Vec3b Color, int* alpha) {
-	//std::cout << "Make stain is called" << std::endl;
 	checkPoint(background, input,stain, i, j, Color, alpha);
-
 }
 
 void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j, Vec3b Color,int* alpha) {
-
 	if (input->at<Vec3b>(Point(i, j)) == Color) {
 		input->at<Vec3b>(Point(i, j)) = background->at<Vec3b>(Point(i, j));
-		//std::cout << stain->stainPoints.size() << std::endl;
-		//std::cout << stain->stainPoints.size() << std::endl;
 		stain->stainPoints.push_back(Point(i, j));
 		stain->area = stain->area + 1;
 		(*alpha) = (*alpha) + 1;
-		if (stain->stainPoints.end()->x == i & stain->stainPoints.end()->y == j) {
+		if (stain->stainPoints.back().x == i & stain->stainPoints.back().y == j) {
 			checkPoint(background, input, stain, i + 1, j, Color,alpha);
 			checkPoint(background, input, stain, i, j + 1, Color, alpha);
 			checkPoint(background, input, stain, i + 1, j + 1, Color, alpha);
