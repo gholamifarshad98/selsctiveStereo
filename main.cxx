@@ -112,13 +112,15 @@ int main()
 		temp = "result_midDis_" + to_string(midDis) + "withoutFilter.png";
 		imwrite(temp, *result_03);
 		shared_ptr<vector<shared_ptr<Stain>>> stainResults = make_shared<vector<shared_ptr<Stain>>>() ;
-		//imshow("result_total", *result_03);
 		stainDetector(result_00, result_03, bgrPixel_04,stainResults);
-
 		for (int i = 1; i < stainResults->size(); i++) {
+			cv::Rect tempRect = Rect(((*stainResults)[i])->minI, ((*stainResults)[i])->minJ, ((*stainResults)[i])->maxI- ((*stainResults)[i])->minI, ((*stainResults)[i])->maxJ- ((*stainResults)[i])->minJ);
+			cv::rectangle(*result_03,tempRect, cv::Scalar(0, 255, 0));
 			std::cout << "the area is " <<(*(stainSize)[i]) << std::endl;
 		}
-		//waitKey(1000);
+
+		imshow("result_total", *result_03);
+		waitKey(1000);
 		cout << midDis << endl;
 	}
 	return 0;
@@ -350,10 +352,14 @@ void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Colo
 		for (int i = 0; i < numOfColumns; i++) {
 			if (input->at<Vec3b>(Point(i, j)) == Color) {
 				shared_ptr<Stain> stain_temp = make_shared<Stain> ();
+				stain_temp->minI = i;
+				stain_temp->maxI = i;
+				stain_temp->minJ = j;
+				stain_temp->maxJ = j;
 				auto alpha = new int(0);
 				std::cout << "this Stain is called " << std::endl;
 				makeStain(background, input, stain_temp, i, j, Color, alpha);
-				if (stain_temp->area >= 30) {
+				if (stain_temp->area >= 18) {
 					stainResults->push_back(stain_temp);
 					stainSize.push_back(alpha);
 				}
@@ -372,6 +378,12 @@ void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<St
 		input->at<Vec3b>(Point(i, j)) = background->at<Vec3b>(Point(i, j));
 		stain->stainPoints.push_back(Point(i, j));
 		stain->area = stain->area + 1;
+		if (i > stain->maxI) {
+			stain->maxI = i;
+		}
+		if (j > stain->maxJ) {
+			stain->maxJ = j;
+		}
 		(*alpha) = (*alpha) + 1;
 		if (stain->stainPoints.back().x == i & stain->stainPoints.back().y == j) {
 			checkPoint(background, input, stain, i + 1, j, Color,alpha);
