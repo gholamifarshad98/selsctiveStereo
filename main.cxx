@@ -2,12 +2,13 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 
-#include <iostream>
+#include<iostream>
 #include<math.h>
 #include<vector>
 #include<memory>
 #include <chrono> 
-#include <string> 
+#include<string> 
+#include<math.h>
 using namespace cv;
 using namespace std;
 using namespace std::chrono;
@@ -58,6 +59,7 @@ void filterResult(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b);
 void checkPoint(shared_ptr<Mat>, shared_ptr<Mat>, shared_ptr<Stain>, int, int, Vec3b,int*);
 void makeStain(shared_ptr<Mat> , shared_ptr<Mat> , shared_ptr<Stain> , int , int, Vec3b,int*);
 void stainDetector(shared_ptr<Mat>, shared_ptr<Mat>, Vec3b, shared_ptr<vector<shared_ptr<Stain>>>);
+void mergingStains(shared_ptr<Mat> , shared_ptr<vector<shared_ptr<Stain>>> );
 int main()
 {
 	auto rightImage = make_shared<Mat>();
@@ -118,7 +120,7 @@ int main()
 			cv::rectangle(*result_03,tempRect, cv::Scalar(0, 255, 0));
 			std::cout << "the area is " <<(*(stainSize)[i]) << std::endl;
 		}
-
+		mergingStains(result_03, stainResults);
 		imshow("result_total", *result_03);
 		waitKey(1000);
 		cout << midDis << endl;
@@ -392,6 +394,52 @@ void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<St
 			checkPoint(background, input, stain, i - 1, j, Color, alpha);
 			checkPoint(background, input, stain, i, j - 1, Color, alpha);
 			checkPoint(background, input, stain, i - 1, j - 1, Color, alpha);
+		}
+	}
+}
+
+
+////////////////////////////////////////////////////////////////////
+/// In this part we will merge the stain.
+////////////////////////////////////////////////////////////////////
+void mergingStains(shared_ptr<Mat> input, shared_ptr<vector<shared_ptr<Stain>>> staingResults) {
+
+	vector<shared_ptr<Stain>>::iterator ptr1;
+	vector<shared_ptr<Stain>>::iterator ptr2;
+	vector<int> distances;
+	int distanceX;
+	int distanceY;
+	for (ptr1 = (*staingResults).begin(); ptr1 < (*staingResults).end(); ptr1++) {
+		for (ptr2 = (*staingResults).begin(); ptr2 < (*staingResults).end(); ptr2++) {
+			if (ptr1 == ptr2) {
+				continue;
+			}
+			distances.clear();
+			distances.push_back(abs((*ptr1)->minI - (*ptr2)->minI));
+			distances.push_back(abs((*ptr1)->minI - (*ptr2)->maxI));
+			distances.push_back(abs((*ptr1)->maxI - (*ptr2)->minI));
+			distances.push_back(abs((*ptr1)->maxI - (*ptr2)->maxI));
+			distances.push_back(abs((*ptr1)->minJ - (*ptr2)->minJ));
+			distances.push_back(abs((*ptr1)->minJ - (*ptr2)->maxJ));
+			distances.push_back(abs((*ptr1)->maxJ - (*ptr2)->minJ));
+			distances.push_back(abs((*ptr1)->maxJ - (*ptr2)->maxJ));
+			int distance = 100000000;
+
+			distanceX = std::min(std::min(distances[0], distances[1]), std::min(distances[2], distances[3]));
+			distanceY = std::min(std::min(distances[4], distances[5]), std::min(distances[6], distances[7]));
+			for (vector<int>::iterator it = distances.begin(); it != distances.end(); it++) {
+				if ((*it) <= distance) {
+					distance = (*it);
+				}
+			}
+			//cout << "***************************************************************************" << endl;
+			//cout << "the distance is " << distance << "." << endl;
+			if (distanceX<40 & distanceY<10) {
+				int mergingRectWidth = std::max(std::max(distances[0], distances[1]), std::max(distances[2], distances[3]));
+				int mergingRectHight = std::max(std::max(distances[4], distances[5]), std::max(distances[6], distances[7]));
+				cv::Rect addingRect = Rect(std::min((*ptr1)->minI, (*ptr2)->minI), std::min((*ptr1)->minJ, (*ptr2)->minJ), mergingRectWidth, mergingRectHight);
+				cv::rectangle(*input, addingRect, cv::Scalar(0, 0, 255));
+			}
 		}
 	}
 }
