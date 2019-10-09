@@ -1,7 +1,6 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-
 #include<iostream>
 #include<math.h>
 #include<vector>
@@ -125,10 +124,15 @@ int main()
 			cerr << e1.msg << endl; // output exception message
 		}
 		
-		for (int i = 1; i < stainResults->size(); i++) {
+		for (int i = 0; i < stainResults->size(); i++) {
 			cv::Rect tempRect = Rect(((*stainResults)[i])->minI, ((*stainResults)[i])->minJ, ((*stainResults)[i])->maxI- ((*stainResults)[i])->minI, ((*stainResults)[i])->maxJ- ((*stainResults)[i])->minJ);
 			cv::rectangle(*result_03,tempRect, cv::Scalar(0, 255, 0));
 			std::cout << "the area is " <<(*(stainSize)[i]) << std::endl;
+		}
+		for (int i = 0; i < stainResults->size(); i++) {
+			for (int j = 0; j < (*stainResults)[i]->stainPoints.size(); j++) {
+				result_03->at<Vec3b>(Point((*stainResults)[i]->stainPoints[j].x, (*stainResults)[i]->stainPoints[j].y))=bgrPixel_04;
+			}
 		}
 		//mergingStains(result_03, stainResults);
 		imshow("result_total", *result_03);
@@ -404,6 +408,13 @@ void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<St
 		if (j > stain->maxJ) {
 			stain->maxJ = j;
 		}
+		if (i < stain->minI) {
+			stain->minI = i;
+		}
+		if (j < stain->minJ) {
+			stain->minJ = j;
+		}
+
 		(*alpha) = (*alpha) + 1;
 		
 		if (stain->stainPoints.back().x == i & stain->stainPoints.back().y == j) {
