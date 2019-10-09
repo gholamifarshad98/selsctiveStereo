@@ -34,9 +34,9 @@ struct Stain
 int numOfColumns;
 int numOfRows;
 int thickness = 60;
-int maxDisparity = 30;
+int maxDisparity = 45;
 int maxkernelSize = 35; // kernel size must be odd number.
-int kernelSize = 5;
+int kernelSize = 9;
 int midleDisparity = 14;
 auto sstereoResult = make_shared<Mat>();
 typedef vector<pixel*> layerVector;
@@ -113,14 +113,24 @@ int main()
 		filterResult(result_00, result_03, bgrPixel_04);
 		temp = "result_midDis_" + to_string(midDis) + "withoutFilter.png";
 		imwrite(temp, *result_03);
+		std::cout << "before stainDetector" << std::endl;
 		shared_ptr<vector<shared_ptr<Stain>>> stainResults = make_shared<vector<shared_ptr<Stain>>>() ;
-		stainDetector(result_00, result_03, bgrPixel_04,stainResults);
+		try
+		{
+			stainDetector(result_00, result_03, bgrPixel_04, stainResults);
+
+		}
+		catch (cv::Exception & e1)
+		{
+			cerr << e1.msg << endl; // output exception message
+		}
+		
 		for (int i = 1; i < stainResults->size(); i++) {
 			cv::Rect tempRect = Rect(((*stainResults)[i])->minI, ((*stainResults)[i])->minJ, ((*stainResults)[i])->maxI- ((*stainResults)[i])->minI, ((*stainResults)[i])->maxJ- ((*stainResults)[i])->minJ);
 			cv::rectangle(*result_03,tempRect, cv::Scalar(0, 255, 0));
 			std::cout << "the area is " <<(*(stainSize)[i]) << std::endl;
 		}
-		mergingStains(result_03, stainResults);
+		//mergingStains(result_03, stainResults);
 		imshow("result_total", *result_03);
 		waitKey(1000);
 		cout << midDis << endl;
@@ -134,10 +144,10 @@ int main()
 void ReadBothImages(shared_ptr<Mat> leftImage, shared_ptr<Mat> rightImage) {
 
 	try {
-		*rightImage = imread("000147_11.png", CV_LOAD_IMAGE_GRAYSCALE);   // Read the right image
+		*rightImage = imread("1.png", CV_LOAD_IMAGE_GRAYSCALE);   // Read the right image
 		//rightImage->convertTo(*rightImage, CV_64F);
 		*rightImage = *rightImage;
-		*leftImage = imread("000147_10.png", CV_LOAD_IMAGE_GRAYSCALE);   // Read the left image
+		*leftImage = imread("2.png", CV_LOAD_IMAGE_GRAYSCALE);   // Read the left image
 		//leftImage->convertTo(*leftImage, CV_64F);
 		*leftImage = *leftImage;
 		numOfRows = leftImage->rows;
@@ -353,6 +363,7 @@ void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Colo
 	for (int j = 0; j < numOfRows; j++) {
 		for (int i = 0; i < numOfColumns; i++) {
 			if (input->at<Vec3b>(Point(i, j)) == Color) {
+				std::cout << "(" << i << "," << j << ")" << endl;
 				shared_ptr<Stain> stain_temp = make_shared<Stain> ();
 				stain_temp->minI = i;
 				stain_temp->maxI = i;
@@ -361,7 +372,8 @@ void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Colo
 				auto alpha = new int(0);
 				std::cout << "this Stain is called " << std::endl;
 				makeStain(background, input, stain_temp, i, j, Color, alpha);
-				if (stain_temp->area >= 18) {
+				std::cout << "make stain is done." << std::endl;
+				if (stain_temp->area >= 1) {   //in this part we will control removing stains by area of stain. 
 					stainResults->push_back(stain_temp);
 					stainSize.push_back(alpha);
 				}
@@ -372,11 +384,17 @@ void stainDetector(shared_ptr<Mat> background, shared_ptr<Mat> input, Vec3b Colo
 }
 
 void makeStain(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j,Vec3b Color, int* alpha) {
+	std::cout << "Debug in stain" << std::endl;
+
 	checkPoint(background, input,stain, i, j, Color, alpha);
 }
 
 void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<Stain> stain, int i, int j, Vec3b Color,int* alpha) {
+	//std:: cout<< "Debug in checkPoint" << std::endl;
+	//std::cout << "i is->(" << j << ")" << endl;
+	//std::cout << "j is->(" << i << ")" << endl;
 	if (input->at<Vec3b>(Point(i, j)) == Color) {
+		
 		input->at<Vec3b>(Point(i, j)) = background->at<Vec3b>(Point(i, j));
 		stain->stainPoints.push_back(Point(i, j));
 		stain->area = stain->area + 1;
@@ -387,12 +405,19 @@ void checkPoint(shared_ptr<Mat> background, shared_ptr<Mat> input, shared_ptr<St
 			stain->maxJ = j;
 		}
 		(*alpha) = (*alpha) + 1;
+		
 		if (stain->stainPoints.back().x == i & stain->stainPoints.back().y == j) {
+			//std::cout << "debug 00001" << std::endl;
 			checkPoint(background, input, stain, i + 1, j, Color,alpha);
+//			std::cout << "debug 00002" << std::endl;
 			checkPoint(background, input, stain, i, j + 1, Color, alpha);
+			//std::cout << "debug 00003" << std::endl;
 			checkPoint(background, input, stain, i + 1, j + 1, Color, alpha);
+			//std::cout << "debug 00004" << std::endl;
 			checkPoint(background, input, stain, i - 1, j, Color, alpha);
+			//std::cout << "debug 00005" << std::endl;
 			checkPoint(background, input, stain, i, j - 1, Color, alpha);
+			//std::cout << "debug 00006" << std::endl;
 			checkPoint(background, input, stain, i - 1, j - 1, Color, alpha);
 		}
 	}
